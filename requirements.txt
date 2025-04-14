@@ -1,3 +1,7 @@
-fastapi
-uvicorn
-python-multipart
+torch
+torchvision
+matplotlib
+seaborn
+scikit-learn
+pillow
+tqdm
