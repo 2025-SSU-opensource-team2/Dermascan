@@ -32,3 +32,21 @@
 2025-04-15 00:39:47,585 - INFO - Latest model saved
 2025-04-15 00:39:47,685 - INFO - Training and Validation Loss plot saved
 2025-04-15 00:39:47,761 - INFO - Training and Validation Accuracy plot saved
+2025-04-15 00:41:23,641 - INFO - Epoch [3/30], Loss: 2.2278, Train Acc: 32.97%
+2025-04-15 00:41:32,418 - INFO - Val Loss: 2.2038, Val Acc: 34.96%
+2025-04-15 00:41:32,525 - INFO - Best model saved
+2025-04-15 00:41:32,694 - INFO - Latest model saved
+2025-04-15 00:41:32,913 - INFO - Training and Validation Loss plot saved
+2025-04-15 00:41:33,005 - INFO - Training and Validation Accuracy plot saved
+2025-04-15 00:43:09,418 - INFO - Epoch [4/30], Loss: 2.0617, Train Acc: 37.19%
+2025-04-15 00:43:18,277 - INFO - Val Loss: 2.0421, Val Acc: 39.41%
+2025-04-15 00:43:18,373 - INFO - Best model saved
+2025-04-15 00:43:18,539 - INFO - Latest model saved
+2025-04-15 00:43:18,645 - INFO - Training and Validation Loss plot saved
+2025-04-15 00:43:18,735 - INFO - Training and Validation Accuracy plot saved
+2025-04-15 00:44:56,421 - INFO - Epoch [5/30], Loss: 1.9092, Train Acc: 41.81%
+2025-04-15 00:45:05,412 - INFO - Val Loss: 1.9640, Val Acc: 40.68%
+2025-04-15 00:45:05,500 - INFO - Best model saved
+2025-04-15 00:45:05,669 - INFO - Latest model saved
+2025-04-15 00:45:05,775 - INFO - Training and Validation Loss plot saved
+2025-04-15 00:45:05,858 - INFO - Training and Validation Accuracy plot saved
