@@ -1,0 +1,22 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.so
+
+# 모델 체크포인트
+*.pth
+
+
+
+# 가상환경
+.venv/
+env/
+venv/
+
+
+_opensource/
+dermnet_data/test/
+dermnet_data/train/
+
+# 기타
+.DS_Store
