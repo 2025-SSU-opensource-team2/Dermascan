@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Derma Vision - Skin Disease Classifier</title>
+    <link rel="icon" href="logo.png" type="image/x-icon">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Raleway:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="index.css" />
+</head>
+
+<body>
+
+    <div class="container">
+        <div class="header">
+            <img src="logo.png" alt="Derma Vision Logo" class="logo">
+            <h1>Derma Vision</h1>
+            <p>Your AI-Powered Skin Health Companion</p>
+        </div>
+
+        <!-- File upload -->
+        <h2>Skin Disease Classifier</h2>
+        <p>Upload an image of your skin and get instant AI-based predictions for common skin conditions.</p>
+
+        <input type="file" id="imageInput" accept="image/*">
+
+        <!-- Image preview -->
+        <div id="imagePreview" class="image-preview"></div>
+
+        <br>
+        <button id="submitBtn">Submit</button>
+
+        <!-- Loading message -->
+        <div class="loading" id="loadingMessage" style="display: none;">Processing image, please wait...</div>
+
+        <!-- Result display -->
+        <div class="result" id="result"></div>
+    </div>
+
+    <div class="footer">
+        &copy; 2024 Derma Vision. All rights reserved.
+    </div>
+
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const imagePreview = document.getElementById('imagePreview');
+
+        imageInput.addEventListener('change', function () {
+            imagePreview.innerHTML = ''; // Clear any previous image preview
+            const file = imageInput.files[0];
+
+            if (file) {
+                const reader = new FileReader();
+
+                reader.onload = function (e) {
+                    const img = document.createElement('img');
+                    img.src = e.target.result;
+                    img.alt = 'Uploaded Image';
+                    img.className = 'uploaded-image';
+                    img.width = 350;
+                    imagePreview.appendChild(img);
+                };
+
+                reader.readAsDataURL(file);
+            }
+        });
+
+        document.getElementById('submitBtn').addEventListener('click', async function () {
+            const resultContainer = document.getElementById('result');
+            const loadingMessage = document.getElementById('loadingMessage');
+
+            resultContainer.innerHTML = ''; // Clear previous results
+            loadingMessage.style.display = 'block'; // Show loading message
+
+            if (!imageInput.files[0]) {
+                resultContainer.innerHTML = '<p class="error">Please upload an image.</p>';
+                loadingMessage.style.display = 'none';
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('image', imageInput.files[0]);
+
+            try {
+                const response = await fetch('http://127.0.0.1:5000/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultContainer.innerHTML = `
+                        <h2>Prediction</h2>
+                        <p><strong>Predicted Class:</strong> ${data.predicted_class}</p>
+                    `;
+                } else {
+                    resultContainer.innerHTML = `<p class="error">Error: ${data.error}</p>`;
+                }
+            } catch (error) {
+                resultContainer.innerHTML = `<p class="error">An unexpected error occurred: ${error.message}</p>`;
+            } finally {
+                loadingMessage.style.display = 'none'; // Hide loading message
+            }
+        });
+    </script>
+
+</body>
+
+</html>

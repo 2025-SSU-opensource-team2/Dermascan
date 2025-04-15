@@ -20,3 +20,4 @@ dermnet_data/train/
 
 # 기타
 .DS_Store
+saved_models/
