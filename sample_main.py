@@ -7,6 +7,9 @@ import torchvision.models as models
 import io
 import json
 
+
+#.pth 형태로 학습된 모델 전달예정 
+
 # Create Flask app and set the static folder to 'public'
 app = Flask(__name__, static_folder='public')
 
@@ -18,7 +21,7 @@ device = torch.device('cpu')  # Force CPU usage
 model = models.resnet34(pretrained=False)
 num_classes = 7  # Replace with the actual number of classes
 model.fc = torch.nn.Linear(model.fc.in_features, num_classes)
-model.load_state_dict(torch.load("skin_model2.pth", map_location=device))  # Ensure model loads on CPU
+model.load_state_dict(torch.load("sample_skin_classification.pth", map_location=device))  # Ensure model loads on CPU
 model.to(device)  # Move model to CPU
 model.eval()
 
@@ -30,6 +33,7 @@ transform = transforms.Compose([
 ])
 
 # Class labels (replace with your actual class labels)
+# 이부분은 오픈소스의 클래스인데, 변경예정. 
 class_labels =  [
     'Acne and Rosacea Photos',
     'Actinic Keratosis Basal Cell Carcinoma and other Malignant Lesions',
@@ -70,7 +74,7 @@ def predict():
 def serve_static(path):
     if path != "" and path is not None:
         return send_from_directory(app.static_folder, path)
-    return send_from_directory(app.static_folder, 'index.html')  # Default to index.html if no path is specified
+    return send_from_directory(app.static_folder, 'sample_index.html')  # Default to index.html if no path is specified
 
 if __name__ == '__main__':
     app.run(debug=True)
