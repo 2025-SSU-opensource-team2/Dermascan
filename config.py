@@ -10,3 +10,6 @@ LEARNING_RATE = 0.001
 
 train_dir = "dermnet_data/train"
 test_dir = "dermnet_data/test"
+
+# 클래스별 strong 증강 적용 기준 (샘플 수 기준)
+AUG_THRESHOLD = 30
