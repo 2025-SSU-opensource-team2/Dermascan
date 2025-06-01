@@ -1,0 +1,5 @@
+### Upload an image
+POST http://localhost:8000/upload-image
+Content-Type: multipart/form-data
+
+file=@example.jpg

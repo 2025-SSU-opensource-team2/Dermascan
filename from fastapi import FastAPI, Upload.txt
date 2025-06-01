@@ -1,0 +1,67 @@
+from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from PIL import Image
+import os
+import shutil
+import io
+import torch
+import torchvision.transforms as transforms
+
+app = FastAPI()
+
+# ✅ CORS 설정
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 프론트 주소로 제한 가능
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ✅ 모델 불러오기
+model = torch.load("model.pt", map_location=torch.device("cpu"))  # CUDA 안쓰면 이렇게
+model.eval()
+
+# ✅ 전처리 함수 (모델에 맞게 수정!)
+transform = transforms.Compose([
+    transforms.Resize((224, 224)),   # 원하는 입력 사이즈로
+    transforms.ToTensor(),          # 이미지 → Tensor
+    transforms.Normalize([0.5]*3, [0.5]*3)  # 정규화 값은 모델 학습 시 사용한 값에 맞게!
+])
+
+# ✅ 업로드 디렉토리
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# ✅ 파일 업로드
+@app.post("/upload/")
+async def upload_image(file: UploadFile = File(...)):
+    file_location = os.path.join(UPLOAD_DIR, file.filename)
+    with open(file_location, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    return {"filename": file.filename}
+
+# ✅ 업로드 파일 보기
+@app.get("/files/{filename}")
+def get_file(filename: str):
+    file_path = os.path.join(UPLOAD_DIR, filename)
+    return FileResponse(file_path)
+
+# ✅ AI 예측 API
+@app.post("/predict/")
+async def predict_image(file: UploadFile = File(...)):
+    # 1. 이미지 읽기
+    image_bytes = await file.read()
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+
+    # 2. 전처리
+    input_tensor = transform(image).unsqueeze(0)  # [1, 3, 224, 224]
+
+    # 3. 모델 추론
+    with torch.no_grad():
+        output = model(input_tensor)
+        pred = output.argmax(dim=1).item()
+
+    # 4. 결과 반환
+    return JSONResponse(content={"result": pred})
