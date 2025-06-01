@@ -1,4 +1,13 @@
+<<<<<<< HEAD
 fastapi
 uvicorn
 python-multipart
 cryptography==42.0.5
+torch
+torchvision
+matplotlib
+seaborn
+scikit-learn
+pillow
+tqdm
+>>>>>>> 8fb578c0fe66fe2d2161c3fd2d1c91a1031d8489
