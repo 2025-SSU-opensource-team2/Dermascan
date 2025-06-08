@@ -1,3 +1,5 @@
+# main.py (수정)
+
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, status, Form
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,7 +14,7 @@ import torch
 import io
 import os
 from cryptography.fernet import Fernet
-import json # scores 저장을 위해 추가
+import json
 
 # DB 관련 임포트
 from sqlalchemy.orm import Session
@@ -31,20 +33,28 @@ app.add_middleware(
 )
 
 # JWT 관련 설정
-SECRET_KEY = "your-secret-key"
+SECRET_KEY = os.getenv("SECRET_KEY", "your-fallback-secret-key") # 환경 변수에서 가져오도록 수정
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-# 암호화 키 (보안 위해 .env로 옮기는 게 이상적)
-# NOTE: 서버 재시작 시마다 키가 바뀌면 기존 암호화된 파일을 복호화할 수 없으므로,
-# 실제 배포 시에는 환경 변수나 파일에서 고정된 키를 로드해야 합니다.
-# 아래는 예시 키이며, 실제로는 generate_key.py로 생성한 유효한 키를 사용해야 합니다.
-ENCRYPTION_KEY = b'S6JvrESVf8nRx0OkyZrjDiP7vKiFszecVrekF6MWgkM=' # 유효한 32바이트 URL-safe base64 인코딩된 키
-fernet = Fernet(ENCRYPTION_KEY)
+# 암호화 키 (환경 변수에서 가져오거나, 빌드 시 생성된 고정 키 사용)
+# Render 환경 변수에서 FERNET_KEY를 가져오도록 수정
+ENCRYPTION_KEY = os.getenv("FERNET_KEY")
+if ENCRYPTION_KEY:
+    fernet = Fernet(ENCRYPTION_KEY.encode()) # 환경 변수는 문자열이므로 바이트로 인코딩
+else:
+    # 환경 변수가 설정되지 않았을 경우, 로컬 개발 또는 예비용으로 고정 키 사용
+    # 실제 배포 시에는 반드시 환경 변수로 관리해야 함
+    print("Warning: FERNET_KEY environment variable not set. Using a default key.")
+    ENCRYPTION_KEY = b'a_default_safe_fernet_key_for_testing_purposes=' # 유효한 32바이트 URL-safe base64 인코딩된 키
+    fernet = Fernet(ENCRYPTION_KEY)
+
 
 # 저장 디렉토리 생성
+# Render는 일시적인 파일 시스템을 제공하므로, 업로드된 파일은 서비스 재시작 시 사라질 수 있습니다.
+# 영구 저장이 필요하면 S3 같은 클라우드 스토리지를 사용해야 합니다.
 SAVE_DIR = "uploads"
 os.makedirs(SAVE_DIR, exist_ok=True)
 
@@ -52,13 +62,30 @@ os.makedirs(SAVE_DIR, exist_ok=True)
 class_labels = [f"Class_{i}" for i in range(31)]
 
 # 모델 로딩
-device = torch.device("cpu")
-model = models.resnet34(pretrained=False)
-model.fc = torch.nn.Linear(model.fc.in_features, 31)
-# NOTE: best_model_epoch_19.pth 파일이 프로젝트 루트에 있다고 가정
-model.load_state_dict(torch.load("best_model_epoch_19.pth", map_location=device))
-model.to(device)
-model.eval()
+device = torch.device("cpu") # Render Free Plan은 CPU만 지원합니다.
+
+# 모델 파일 경로 수정: GitHub 저장소 내의 실제 경로로 지정
+# 예를 들어, 모델이 저장소 루트에 있다면 "best_model_epoch_19.pth"
+# 만약 `backend` 폴더 안에 있다면, "backend/best_model_epoch_19.pth" 또는 "best_model_epoch_19.pth" (Render root dir 설정에 따라 다름)
+# GitHub 스크린샷 상 `best_model_epoch_19.pth`가 루트 폴더가 아니라 `saved_models/250414_초기_세팅_실험` 안에 있을 가능성이 높습니다.
+# 모델 파일의 GitHub 저장소 내 실제 경로를 확인하여 아래를 수정해야 합니다.
+MODEL_PATH = "best_model_epoch_19.pth" # 여기에 실제 모델 파일 경로를 입력 (예: "saved_models/250414_초기_세팅_실험/best_model_epoch_19.pth")
+
+try:
+    model = models.resnet34(pretrained=False)
+    model.fc = torch.nn.Linear(model.fc.in_features, 31)
+    model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
+    model.to(device)
+    model.eval()
+    print(f"Model loaded successfully from {MODEL_PATH}")
+except FileNotFoundError:
+    print(f"Error: Model file not found at {MODEL_PATH}. Please ensure the model file is in the correct path.")
+    # Render 배포 시 모델 파일을 다운로드 받거나, 경로를 명확히 해야 함
+    raise RuntimeError(f"Model file not found at {MODEL_PATH}")
+except Exception as e:
+    print(f"Error loading model: {e}")
+    raise RuntimeError(f"Failed to load model: {e}")
+
 
 # 이미지 전처리
 transform = transforms.Compose([
@@ -68,14 +95,13 @@ transform = transforms.Compose([
                          std=[0.229, 0.224, 0.225])
 ])
 
-# JWT 생성 함수
+# JWT 생성 함수 (이하 동일)
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-# JWT 검증 함수
 def verify_token(token: str, credentials_exception):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -83,7 +109,6 @@ def verify_token(token: str, credentials_exception):
     except JWTError:
         raise credentials_exception
 
-# 현재 유저 가져오기
 def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -92,7 +117,6 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
     username = verify_token(token, credentials_exception)
     return username
 
-# DB 세션 의존성 주입 함수
 def get_db():
     db = SessionLocal()
     try:
@@ -104,8 +128,10 @@ def get_db():
 @app.on_event("startup")
 async def startup_event():
     init_db()
+    # 배포 시마다 병명 데이터를 DB에 로드하고 싶다면 여기에 load_data_to_db() 호출 로직 추가
+    # from load_disease_data import load_data_to_db # load_disease_data 함수 임포트
+    # load_data_to_db() # 이 함수를 호출하여 DB에 병명 데이터를 초기 로드
 
-# 로그인 엔드포인트
 @app.post("/token")
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     if form_data.username != "admin" or form_data.password != "1234":
@@ -117,7 +143,6 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
-# 이미지 유효성 검증
 def validate_image_file(file: UploadFile):
     ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png"}
     ext = file.filename.split('.')[-1].lower()
@@ -126,12 +151,11 @@ def validate_image_file(file: UploadFile):
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Uploaded file must be an image.")
 
-# 예측 엔드포인트
 @app.post("/predict/")
 async def predict_image(
     file: UploadFile = File(...),
     user: str = Depends(get_current_user),
-    db: Session = Depends(get_db) # DB 세션 주입
+    db: Session = Depends(get_db)
 ):
     try:
         validate_image_file(file)
@@ -162,7 +186,6 @@ async def predict_image(
             predicted_class = class_labels[predicted.item()]
             scores = {label: float(score) for label, score in zip(class_labels, outputs[0].tolist())}
 
-        # DB에 예측 결과 저장
         db_prediction = Prediction(
             user_id=user,
             predicted_class=predicted_class,
@@ -188,7 +211,6 @@ async def predict_image(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
-# 과거 예측 결과 조회 엔드포인트
 @app.get("/predictions/")
 async def get_predictions(
     user: str = Depends(get_current_user),
@@ -209,7 +231,6 @@ async def get_predictions(
         })
     return JSONResponse(content=results)
 
-# 병명 정보 조회 엔드포인트 (새로 추가)
 @app.get("/diseases/{disease_name}")
 async def get_disease_info(
     disease_name: str,
@@ -220,7 +241,6 @@ async def get_disease_info(
     if not disease_info:
         raise HTTPException(status_code=404, detail="Disease information not found.")
 
-    # DB에서 가져온 JSON 문자열 필드를 다시 파이썬 객체로 변환
     symptoms = json.loads(disease_info.symptoms) if disease_info.symptoms else []
     causes = json.loads(disease_info.causes) if disease_info.causes else []
     treatment_methods = json.loads(disease_info.treatment_methods) if disease_info.treatment_methods else []
@@ -240,7 +260,6 @@ async def get_disease_info(
         "last_updated": disease_info.last_updated.isoformat()
     })
 
-# 모든 병명 정보 조회 엔드포인트 (선택 사항, 리스트 필요 시)
 @app.get("/diseases/")
 async def get_all_diseases_info(
     db: Session = Depends(get_db)
@@ -255,6 +274,5 @@ async def get_all_diseases_info(
             "definition": disease.definition,
             "source_url": disease.source_url,
             "last_updated": disease.last_updated.isoformat()
-            # 모든 필드를 반환할 수도 있지만, 목록 조회 시에는 필요한 정보만 반환하는 것이 효율적
         })
     return JSONResponse(content=results)
