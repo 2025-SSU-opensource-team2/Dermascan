@@ -15,47 +15,64 @@ import io
 import os
 from cryptography.fernet import Fernet
 import json
-import urllib.request # 추가된 부분
+import urllib.request
 
-# DB 관련 임포트
+# DB 관련 임포트 (User 모델 추가)
 from sqlalchemy.orm import Session
-from database import SessionLocal, init_db, Prediction, DiseaseInfo # DiseaseInfo 모델 임포트 추가
+from database import SessionLocal, init_db, Prediction, DiseaseInfo, User # User 모델 임포트 추가
+
+# Pydantic 스키마 정의 (추가)
+from pydantic import BaseModel, EmailStr
+
+class UserCreate(BaseModel): # 회원가입 요청 시 사용
+    email: EmailStr
+    password: str
+
+class UserResponse(BaseModel): # 사용자 정보 응답 시 사용
+    id: int
+    email: EmailStr
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+class Token(BaseModel): # 로그인 응답 시 사용
+    access_token: str
+    token_type: str
 
 # 앱 생성
 app = FastAPI()
 
-# CORS 설정
+# CORS 설정 (http://localhost:5173 추가)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://skin-diagnosis-fastapi-t6hz.vercel.app"],
+    allow_origins=[
+        "https://skin-diagnosis-fastapi-t6hz.vercel.app",
+        "http://localhost:5173" # 요청하신 로컬 주소 추가
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # JWT 관련 설정
-SECRET_KEY = os.getenv("SECRET_KEY", "your-fallback-secret-key") # 환경 변수에서 가져오도록 수정
+SECRET_KEY = os.getenv("SECRET_KEY", "your-fallback-secret-key")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 # 토큰 만료 시간 30분 -> 60분 (선택 사항)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # 암호화 키 (환경 변수에서 가져오거나, 빌드 시 생성된 고정 키 사용)
-# Render 환경 변수에서 FERNET_KEY를 가져오도록 수정
 ENCRYPTION_KEY = os.getenv("FERNET_KEY")
 if ENCRYPTION_KEY:
-    fernet = Fernet(ENCRYPTION_KEY.encode()) # 환경 변수는 문자열이므로 바이트로 인코딩
+    fernet = Fernet(ENCRYPTION_KEY.encode())
 else:
-    # 환경 변수가 설정되지 않았을 경우, 로컬 개발 또는 예비용으로 고정 키 사용
-    # 실제 배포 시에는 반드시 환경 변수로 관리해야 함
     print("Warning: FERNET_KEY environment variable not set. Using a default key.")
-    ENCRYPTION_KEY = b'a_default_safe_fernet_key_for_testing_purposes=' # 유효한 32바이트 URL-safe base64 인코딩된 키
+    ENCRYPTION_KEY = b'a_default_safe_fernet_key_for_testing_purposes_for_fernet=' # 유효한 32바이트 URL-safe base64 인코딩된 키로 교체 필요
     fernet = Fernet(ENCRYPTION_KEY)
 
 
 # 저장 디렉토리 생성
-# Render는 일시적인 파일 시스템을 제공하므로, 업로드된 파일은 서비스 재시작 시 사라질 수 있습니다.
-# 영구 저장이 필요하면 S3 같은 클라우드 스토리지를 사용해야 합니다.
 SAVE_DIR = "uploads"
 os.makedirs(SAVE_DIR, exist_ok=True)
 
@@ -63,23 +80,18 @@ os.makedirs(SAVE_DIR, exist_ok=True)
 class_labels = [f"Class_{i}" for i in range(31)]
 
 # 모델 로딩
-device = torch.device("cpu") # Render Free Plan은 CPU만 지원합니다.
+device = torch.device("cpu")
 
-# 모델 파일 로딩 로직을 GCS에서 다운로드하도록 변경
-# === 이 부분을 당신의 GCS Public URL로 변경해야 합니다! ===
-MODEL_URL = "https://storage.googleapis.com/dermascan-model-data-2025/best_model_epoch_19.pth" # <<< 여기에 당신의 실제 GCS Public URL을 붙여넣으세요! (예: https://storage.googleapis.com/dermascan-model-data-2025/best_model_epoch_19.pth)
-LOCAL_MODEL_PATH = "best_model_epoch_19.pth" # 모델을 다운로드하여 임시로 저장할 파일 이름
-# =======================================================
+MODEL_URL = "https://storage.googleapis.com/dermascan-model-data-2025/best_model_epoch_19.pth"
+LOCAL_MODEL_PATH = "best_model_epoch_19.pth"
 
 try:
     print(f"Downloading model from {MODEL_URL}...")
-    # 모델 다운로드 시도
     urllib.request.urlretrieve(MODEL_URL, LOCAL_MODEL_PATH)
     print(f"Model downloaded to {LOCAL_MODEL_PATH}")
 
     model = models.resnet34(pretrained=False)
     model.fc = torch.nn.Linear(model.fc.in_features, 31)
-    # 다운로드된 모델 파일 로드
     model.load_state_dict(torch.load(LOCAL_MODEL_PATH, map_location=device))
     model.to(device)
     model.eval()
@@ -89,7 +101,6 @@ except FileNotFoundError:
     raise RuntimeError(f"Model file not found at {LOCAL_MODEL_PATH}")
 except Exception as e:
     print(f"Error loading model: {e}")
-    # 추가 디버깅을 위해 메모리 사용량도 출력해보는 것을 고려할 수 있습니다.
     import sys
     import psutil
     process = psutil.Process(os.getpid())
@@ -120,17 +131,25 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
 def verify_token(token: str, credentials_exception):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload.get("sub")
+        email: str = payload.get("sub") # 'sub'를 이메일로 사용
+        if email is None:
+            raise credentials_exception
+        return email # 이메일 반환
     except JWTError:
         raise credentials_exception
 
-def get_current_user(token: str = Depends(oauth2_scheme)):
+# get_current_user 함수 수정: User 객체를 반환하도록
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
     )
-    username = verify_token(token, credentials_exception)
-    return username
+    email = verify_token(token, credentials_exception)
+    user = db.query(User).filter(User.email == email).first()
+    if user is None:
+        raise credentials_exception
+    return user # 사용자 객체 반환
 
 def get_db():
     db = SessionLocal()
@@ -142,22 +161,48 @@ def get_db():
 
 @app.on_event("startup")
 async def startup_event():
-    init_db() 
-    
+    init_db()
     from load_disease_data import load_data_to_db
-    load_data_to_db() 
+    load_data_to_db()
 
-@app.post("/token")
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    if form_data.username != "admin" or form_data.password != "1234":
-        raise HTTPException(status_code=400, detail="Invalid credentials")
+# --- 사용자 관련 엔드포인트 추가 ---
 
+@app.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def signup(user_create: UserCreate, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.email == user_create.email).first()
+    if db_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+    hashed_password = pwd_context.hash(user_create.password)
+    new_user = User(email=user_create.email, hashed_password=hashed_password)
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+@app.post("/token", response_model=Token) # 로그인 엔드포인트 수정
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == form_data.username).first()
+    if not user or not pwd_context.verify(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": form_data.username}, expires_delta=access_token_expires
+        data={"sub": user.email}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
+@app.get("/users/me/", response_model=UserResponse)
+async def read_users_me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
+# --- 기존 코드 (user 파라미터 타입 변경: str -> User) ---
 def validate_image_file(file: UploadFile):
     ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png"}
     ext = file.filename.split('.')[-1].lower()
@@ -169,7 +214,7 @@ def validate_image_file(file: UploadFile):
 @app.post("/predict/")
 async def predict_image(
     file: UploadFile = File(...),
-    user: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user), # User 객체로 변경
     db: Session = Depends(get_db)
 ):
     try:
@@ -202,7 +247,7 @@ async def predict_image(
             scores = {label: float(score) for label, score in zip(class_labels, outputs[0].tolist())}
 
         db_prediction = Prediction(
-            user_id=user,
+            user_id=current_user.email, # user.id 대신 user.email 사용 (고유 식별자로)
             predicted_class=predicted_class,
             scores_json=json.dumps(scores),
             image_path_raw=raw_path,
@@ -228,10 +273,10 @@ async def predict_image(
 
 @app.get("/predictions/")
 async def get_predictions(
-    user: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user), # User 객체로 변경
     db: Session = Depends(get_db)
 ):
-    predictions = db.query(Prediction).filter(Prediction.user_id == user).all()
+    predictions = db.query(Prediction).filter(Prediction.user_id == current_user.email).all() # user_id를 email로 변경
 
     results = []
     for pred in predictions:
@@ -280,7 +325,7 @@ async def get_all_diseases_info(
     db: Session = Depends(get_db)
 ):
     all_diseases = db.query(DiseaseInfo).all()
-    
+
     results = []
     for disease in all_diseases:
         results.append({

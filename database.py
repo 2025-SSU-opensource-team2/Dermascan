@@ -38,6 +38,14 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # 모든 SQLAlchemy 모델의 기반이 되는 선언적 베이스 클래스
 Base = declarative_base()
 
+# User 모델 추가
+class User(Base):
+    __tablename__ = "users" # 테이블명은 'users'로 지정합니다.
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=False) # 이메일은 고유해야 하고 필수입니다.
+    hashed_password = Column(String, nullable=False) # 해싱된 비밀번호입니다.
+    created_at = Column(DateTime, default=datetime.utcnow) # 생성 시간입니다.
+
 class Prediction(Base):
     __tablename__ = "predictions"
 
