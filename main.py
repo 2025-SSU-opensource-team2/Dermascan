@@ -105,6 +105,11 @@ transform = transforms.Compose([
                          std=[0.229, 0.224, 0.225])
 ])
 
+# 루트 엔드포인트 추가 (Health Check 응답용)
+@app.get("/")
+async def root():
+    return {"message": "API is running successfully!"}
+
 # JWT 생성 함수 (이하 동일)
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
