@@ -11,5 +11,6 @@ pillow
 tqdm
 python-jose[cryptography]
 passlib[bcrypt]
-psycopg2-binary # Render PostgreSQL 사용 시 필수
-gunicorn # Procfile에서 gunicorn 사용 시 필수
+psycopg2-binary # 추가
+SQLAlchemy      # 추가
+gunicorn        # Procfile에서 gunicorn 사용 시 필수
