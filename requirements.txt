@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 fastapi
 uvicorn
 python-multipart
@@ -12,24 +11,6 @@ pillow
 tqdm
 python-jose[cryptography]
 passlib[bcrypt]
-psycopg2-binary # 추가
-SQLAlchemy      # 추가
-gunicorn        # Procfile에서 gunicorn 사용 시 필수
-=======
-fastapi
-uvicorn
-python-multipart
-cryptography==42.0.5
-torch
-torchvision
-matplotlib
-seaborn
-scikit-learn
-pillow
-tqdm
-python-jose[cryptography]
-passlib[bcrypt]
-psycopg2-binary # 추가
-SQLAlchemy      # 추가
-gunicorn        # Procfile에서 gunicorn 사용 시 필수
->>>>>>> 675a081f317d4866ec04cc60a9eb59b6d169ad48
+psycopg2-binary
+SQLAlchemy
+gunicorn
