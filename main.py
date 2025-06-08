@@ -65,7 +65,6 @@ class_labels = [f"Class_{i}" for i in range(31)]
 # 모델 로딩
 device = torch.device("cpu") # Render Free Plan은 CPU만 지원합니다.
 
-# 모델 파일 경로 수정: GitHub 저장소 내의 실제 경로로 지정
 # 모델 파일 로딩 로직을 GCS에서 다운로드하도록 변경
 # === 이 부분을 당신의 GCS Public URL로 변경해야 합니다! ===
 MODEL_URL = "https://storage.googleapis.com/dermascan-model-data-2025/best_model_epoch_19.pth" # <<< 여기에 당신의 실제 GCS Public URL을 붙여넣으세요! (예: https://storage.googleapis.com/dermascan-model-data-2025/best_model_epoch_19.pth)
