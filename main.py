@@ -1,4 +1,4 @@
-# main.py (수정)
+# main.py (최종 수정)
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, status, Form
 from fastapi.responses import JSONResponse
@@ -68,7 +68,8 @@ if ENCRYPTION_KEY:
     fernet = Fernet(ENCRYPTION_KEY.encode())
 else:
     print("Warning: FERNET_KEY environment variable not set. Using a default key.")
-    ENCRYPTION_KEY = b'a_default_safe_fernet_key_for_testing_purposes_for_fernet=' # 유효한 32바이트 URL-safe base64 인코딩된 키로 교체 필요
+    # 실제 배포 시에는 반드시 환경 변수로 관리하거나, 유효한 32바이트 URL-safe base64 인코딩된 키로 변경하세요.
+    ENCRYPTION_KEY = b'a_default_safe_fernet_key_for_testing_purposes_for_fernet='
     fernet = Fernet(ENCRYPTION_KEY)
 
 
@@ -121,7 +122,7 @@ transform = transforms.Compose([
 async def root():
     return {"message": "API is running successfully!"}
 
-# JWT 생성 함수 (이하 동일)
+# JWT 생성 함수
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
@@ -138,6 +139,15 @@ def verify_token(token: str, credentials_exception):
     except JWTError:
         raise credentials_exception
 
+# === get_db 함수 정의: get_current_user 함수보다 위에 위치 ===
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+# =============================================================
+
 # get_current_user 함수 수정: User 객체를 반환하도록
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
@@ -150,13 +160,6 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if user is None:
         raise credentials_exception
     return user # 사용자 객체 반환
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 @app.on_event("startup")
@@ -202,7 +205,7 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
-# --- 기존 코드 (user 파라미터 타입 변경: str -> User) ---
+# --- 기존 기능들 (user 파라미터 타입 변경: str -> User) ---
 def validate_image_file(file: UploadFile):
     ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png"}
     ext = file.filename.split('.')[-1].lower()
