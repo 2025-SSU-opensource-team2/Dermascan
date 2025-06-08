@@ -14,3 +14,4 @@ passlib[bcrypt]
 psycopg2-binary
 SQLAlchemy
 gunicorn
+email-validator
