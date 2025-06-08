@@ -139,13 +139,13 @@ def get_db():
     finally:
         db.close()
 
-# 애플리케이션 시작 시 DB 초기화
+
 @app.on_event("startup")
 async def startup_event():
-    init_db()
-    # 배포 시마다 병명 데이터를 DB에 로드하고 싶다면 여기에 load_data_to_db() 호출 로직 추가
-    # from load_disease_data import load_data_to_db # load_disease_data 함수 임포트
-    # load_data_to_db() # 이 함수를 호출하여 DB에 병명 데이터를 초기 로드
+    init_db() 
+    
+    from load_disease_data import load_data_to_db
+    load_data_to_db() 
 
 @app.post("/token")
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
